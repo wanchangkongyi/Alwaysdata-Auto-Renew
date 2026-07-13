@@ -1,1 +1,53 @@
+name: Alwaysdata Auto Renew
 
+on:
+  schedule:
+    # 每天 UTC 0 点 (北京时间 8 点) 运行；alwaysdata 免费账号一般要求定期活跃即可，
+    # 无需每天多次触发，避免不必要的请求频率
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动触发
+
+# 需要 write 权限：本工作流会在结束后提交一个 keepalive 时间戳文件，
+# 防止仓库 60 天无 commit 导致 GitHub 自动暂停 scheduled workflow
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20   # 多账号 + 随机延迟，给足时间上限，防止意外挂起导致跑满默认 6 小时
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run renew script
+        env:
+          # ACCOUNTS_JSON 格式: [{"username":"a@x.com","password":"xxx"}, ...]
+          # 在仓库 Settings -> Secrets and variables -> Actions 中配置，切勿用 Variables
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          # 账号间随机延迟范围（秒），可按需调整
+          DELAY_MIN_SECONDS: '20'
+          DELAY_MAX_SECONDS: '90'
+        run: python renew.py
+
+      - name: Keepalive
+        # 无论主任务成功与否都要执行，保证仓库持续有 commit，
+        # 避免 GitHub 60 天无提交自动暂停 scheduled workflow
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          date -u > .keepalive
+          git add .keepalive
+          git commit -m "chore: keepalive $(date -u +%Y-%m-%d)" || echo "无变化，跳过提交"
+          git push
