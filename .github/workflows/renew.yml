@@ -4,7 +4,7 @@ on:
   schedule:
     # 每天 UTC 0 点 (北京时间 8 点) 运行；alwaysdata 免费账号一般要求定期活跃即可，
     # 无需每天多次触发，避免不必要的请求频率
-    - cron: '0 0 * * *'
+    - cron: '0 1 1 * *'
   workflow_dispatch: # 允许手动触发
 
 # 需要 write 权限：本工作流会在结束后提交一个 keepalive 时间戳文件，
